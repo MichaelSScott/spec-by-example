@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 import { processTestCases } from "./index.js";
 import path from "path";
-import { fileURLToPath } from "url";
-
-// Fix __dirname issue in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const args = process.argv.slice(2);
 const inputFile = args[0];

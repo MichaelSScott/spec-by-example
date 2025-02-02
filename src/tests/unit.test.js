@@ -1,4 +1,4 @@
-import { mapTestCases } from "../src/runner/testCaseMapper.js";
+import { mapTestCases } from "../runner/testCaseMapper.js";
 
 test("should map Excel rows to test cases correctly", () => {
   const rows = [
