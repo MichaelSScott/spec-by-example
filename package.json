@@ -1,0 +1,21 @@
+{
+  "name": "spec-by-example",
+  "version": "1.0.0",
+  "description": "A JavaScript tool for running Specification by Example tests.",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "spec-by-example": "./src/cli.js"
+  },
+  "jest": {
+    "transform": {}
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "Michael Scott",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
