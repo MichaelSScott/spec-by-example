@@ -34,7 +34,7 @@ Or add it to your project:
 
 Run the tool directly from your terminal to execute tests or generate test configurations.
 
-1. **Run Tests**
+1. **Run Tests from Specifications**
 
     ```bash 
     spec-by-example <input-file> [output-format] [config-file]
@@ -77,6 +77,26 @@ Run the tool directly from your terminal to execute tests or generate test confi
     1. Scan ./src for functions.
     2. Generate a testConfig.js file that maps discovered functions for testing.
     3. Provide refactoring suggestions in the terminal if code structure issues are found.
+
+3. **Scan Code for Refactoring Suggestions**
+
+    Scans your app code to find functions and suggest refactoring opportunities:
+
+    ```bash
+    spec-by-example scan-code ./src
+    ```
+
+    - Output Example:
+
+    ```
+    Refactor suggestion: Function "complexFunction" has too many parameters (5). Consider simplifying.
+    Refactor suggestion: Function "deleteEBE" lacks documentation.
+
+    --- Discovered Functions ---
+    Function: addEBE (model, ebe) in /path/to/src/appLogic.js
+    Function: deleteEBE (model, ebeId) in /path/to/src/appLogic.js
+    Function: complexFunction (a, b, c, d, e) in /path/to/src/appLogic.js
+    ```
 
 ## Programmatic Usage
 

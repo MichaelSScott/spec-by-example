@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { processTestCases } from "./index.js";
-import { generateTestConfig } from "./utils/testConfigGenerator.js";
-import { scanAppFunctions } from "./utils/codeScanner.js";
+import { generateTestConfig } from "./utils/test-config-generator.js";
+import { scanAppFunctions } from "./utils/code-scanner.js";
 import path from "path";
 
 const args = process.argv.slice(2);
