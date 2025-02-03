@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
 import { parse } from "@babel/parser";
-import traverse from "@babel/traverse/lib/index.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const traverse = require("@babel/traverse").default;
 
 /**
  * Recursively get all JS files in a directory
@@ -38,7 +40,7 @@ export const scanAppFunctions = (dir) => {
 
     let isReactFile = false;
 
-    // Detect if the file is a React component file by checking for React imports
+    // Detect if the file imports React
     traverse(ast, {
       ImportDeclaration({ node }) {
         if (node.source.value === "react") {
@@ -47,65 +49,66 @@ export const scanAppFunctions = (dir) => {
       },
     });
 
+    // Traverse the AST to find functions and skip React components
     traverse(ast, {
-      FunctionDeclaration({ node }) {
-        const functionName = node.id.name;
-
-        // Check if the function is a React component (capitalized and returns JSX)
+      FunctionDeclaration(path) {
+        const functionName = path.node.id.name;
         const isPotentialReactComponent = /^[A-Z]/.test(functionName);
-
-        // Check if the function returns JSX
         let returnsJSX = false;
-        traverse(node, {
-          ReturnStatement({ node }) {
+
+        // Check if the function returns JSX within its body
+        path.traverse({
+          ReturnStatement(returnPath) {
+            const argument = returnPath.node.argument;
             if (
-              node.argument &&
-              (node.argument.type === "JSXElement" ||
-                node.argument.type === "JSXFragment")
+              argument &&
+              (argument.type === "JSXElement" ||
+                argument.type === "JSXFragment")
             ) {
               returnsJSX = true;
             }
           },
         });
 
-        // Skip React components but keep non-React capitalized functions
+        // Skip React components
         if (isReactFile && isPotentialReactComponent && returnsJSX) {
           return;
         }
 
-        // Add the function if it's not a React component
+        // Add non-React functions
         functions.push({
           name: functionName,
-          params: node.params.map((param) => param.name),
+          params: path.node.params.map((param) => param.name),
           file,
         });
       },
 
-      // Detect arrow functions assigned to variables
-      VariableDeclarator({ node }) {
+      VariableDeclarator(path) {
+        const { node } = path;
         if (
           node.init &&
           (node.init.type === "ArrowFunctionExpression" ||
             node.init.type === "FunctionExpression")
         ) {
           const functionName = node.id.name;
-
-          // Same React detection logic for arrow functions
           const isPotentialReactComponent = /^[A-Z]/.test(functionName);
-
           let returnsJSX = false;
-          traverse(node.init, {
-            ReturnStatement({ node }) {
+
+          // Check if the arrow function returns JSX
+          path.traverse({
+            ReturnStatement(returnPath) {
+              const argument = returnPath.node.argument;
               if (
-                node.argument &&
-                (node.argument.type === "JSXElement" ||
-                  node.argument.type === "JSXFragment")
+                argument &&
+                (argument.type === "JSXElement" ||
+                  argument.type === "JSXFragment")
               ) {
                 returnsJSX = true;
               }
             },
           });
 
+          // Skip React components
           if (isReactFile && isPotentialReactComponent && returnsJSX) {
             return;
           }
