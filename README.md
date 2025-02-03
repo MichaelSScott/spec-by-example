@@ -110,7 +110,7 @@ The SbE tool can scan your app’s code to automatically generate the testConfig
 1. Example
 
     ```bash
-    //spec-by-example generate-config ./src
+    spec-by-example generate-config ./src
     ```
 
     This will:
