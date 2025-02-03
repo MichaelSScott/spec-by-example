@@ -1,9 +1,9 @@
 {
   "name": "spec-by-example",
   "version": "1.0.3",
+  "type": "module",
   "description": "A JavaScript tool for running Specification by Example tests from Excel, CSV, and ODS files.",
   "main": "src/index.js",
-  "type": "module",
   "bin": {
     "spec-by-example": "./src/cli.js"
   },

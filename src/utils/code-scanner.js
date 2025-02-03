@@ -1,12 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { parse } from "@babel/parser";
-
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-
-// Import babel traverse in CommonJS style
-const traverse = require("@babel/traverse").default;
+import traverse from "@babel/traverse/lib/index.js";
 
 /**
  * Recursively get all JS files in a directory
@@ -27,7 +22,7 @@ const getAllJsFiles = (dir, files = []) => {
 };
 
 /**
- * Scan app code for functions and provide refactoring suggestions
+ * Scan app code for functions and filter out React components.
  */
 export const scanAppFunctions = (dir) => {
   const jsFiles = getAllJsFiles(dir);
@@ -41,29 +36,44 @@ export const scanAppFunctions = (dir) => {
       comments: true,
     });
 
+    let isReactFile = false;
+
+    // Detect if the file is a React component file by checking for React imports
     traverse(ast, {
-      // Detect standard function declarations
+      ImportDeclaration({ node }) {
+        if (node.source.value === "react") {
+          isReactFile = true;
+        }
+      },
+    });
+
+    traverse(ast, {
       FunctionDeclaration({ node }) {
         const functionName = node.id.name;
-        const paramCount = node.params.length;
-        const hasDocs =
-          node.leadingComments &&
-          node.leadingComments.some(
-            (comment) => comment.type === "CommentBlock"
-          );
 
-        if (paramCount > 3) {
-          console.warn(
-            `Refactor suggestion: Function "${functionName}" has too many parameters (${paramCount}). Consider simplifying.`
-          );
+        // Check if the function is a React component (capitalized and returns JSX)
+        const isPotentialReactComponent = /^[A-Z]/.test(functionName);
+
+        // Check if the function returns JSX
+        let returnsJSX = false;
+        traverse(node, {
+          ReturnStatement({ node }) {
+            if (
+              node.argument &&
+              (node.argument.type === "JSXElement" ||
+                node.argument.type === "JSXFragment")
+            ) {
+              returnsJSX = true;
+            }
+          },
+        });
+
+        // Skip React components but keep non-React capitalized functions
+        if (isReactFile && isPotentialReactComponent && returnsJSX) {
+          return;
         }
 
-        if (!hasDocs) {
-          console.warn(
-            `Refactor suggestion: Function "${functionName}" lacks documentation.`
-          );
-        }
-
+        // Add the function if it's not a React component
         functions.push({
           name: functionName,
           params: node.params.map((param) => param.name),
@@ -71,15 +81,38 @@ export const scanAppFunctions = (dir) => {
         });
       },
 
-      // Detect arrow functions or function expressions assigned to variables
+      // Detect arrow functions assigned to variables
       VariableDeclarator({ node }) {
         if (
           node.init &&
           (node.init.type === "ArrowFunctionExpression" ||
             node.init.type === "FunctionExpression")
         ) {
+          const functionName = node.id.name;
+
+          // Same React detection logic for arrow functions
+          const isPotentialReactComponent = /^[A-Z]/.test(functionName);
+
+          let returnsJSX = false;
+          traverse(node.init, {
+            ReturnStatement({ node }) {
+              if (
+                node.argument &&
+                (node.argument.type === "JSXElement" ||
+                  node.argument.type === "JSXFragment")
+              ) {
+                returnsJSX = true;
+              }
+            },
+          });
+
+          if (isReactFile && isPotentialReactComponent && returnsJSX) {
+            return;
+          }
+
+          // Add non-React functions
           functions.push({
-            name: node.id.name,
+            name: functionName,
             params: node.init.params.map((param) => param.name),
             file,
           });

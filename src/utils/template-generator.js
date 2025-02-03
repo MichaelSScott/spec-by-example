@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import xlsx from "xlsx";
 
 /**
@@ -9,7 +10,12 @@ import xlsx from "xlsx";
  * @param {string} outputFormat - Desired output format (xlsx, csv, ods).
  */
 export const generateTemplateTestCases = async (configFile, outputFormat) => {
-  const { actions } = await import(path.resolve(configFile));
+  // Convert the Windows file path to a file:// URL
+  const configFileURL = pathToFileURL(path.resolve(configFile)).href;
+
+  // Dynamically import the testConfig.js using the file:// URL
+  const { actions } = await import(configFileURL);
+
   const testCases = [];
 
   Object.keys(actions).forEach((actionName) => {
