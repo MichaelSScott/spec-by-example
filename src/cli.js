@@ -2,6 +2,7 @@
 import { processTestCases } from "./index.js";
 import { generateTestConfig } from "./utils/test-config-generator.js";
 import { scanAppFunctions } from "./utils/code-scanner.js";
+import { generateTemplateTestCases } from "./utils/template-generator.js";
 import path from "path";
 
 const args = process.argv.slice(2);
@@ -24,6 +25,13 @@ else if (command === "scan-code") {
       `Function: ${func.name} (${func.params.join(", ")}) in ${func.file}`
     );
   });
+}
+
+// Generate template test case file from testConfig.js
+else if (command === "generate-template") {
+  const configFile = args[1] || "./testConfig.js";
+  const outputFormat = args[2] || "xlsx";
+  generateTemplateTestCases(configFile, outputFormat);
 }
 
 // Default Command: Run tests from specifications
