@@ -16,6 +16,8 @@
   "author": "Michael Scott",
   "license": "MIT",
   "dependencies": {
+    "@babel/parser": "^7.26.7",
+    "@babel/traverse": "^7.26.7",
     "libreoffice-convert": "^1.6.0",
     "xlsx": "^0.18.5"
   },
