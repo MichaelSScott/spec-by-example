@@ -1,7 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
+
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
+// Import babel traverse in CommonJS style
+const traverse = require("@babel/traverse").default;
 
 /**
  * Recursively get all JS files in a directory
@@ -37,7 +42,7 @@ export const scanAppFunctions = (dir) => {
     });
 
     traverse(ast, {
-      // This is where your function is called!
+      // Detect standard function declarations
       FunctionDeclaration({ node }) {
         const functionName = node.id.name;
         const paramCount = node.params.length;
@@ -66,7 +71,7 @@ export const scanAppFunctions = (dir) => {
         });
       },
 
-      // Optionally, scan for arrow functions or other declarations
+      // Detect arrow functions or function expressions assigned to variables
       VariableDeclarator({ node }) {
         if (
           node.init &&
