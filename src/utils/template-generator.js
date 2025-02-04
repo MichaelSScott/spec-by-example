@@ -10,21 +10,41 @@ import xlsx from "xlsx";
  * @param {string} outputFormat - Desired output format (xlsx, csv, ods).
  */
 export const generateTemplateTestCases = async (configFile, outputFormat) => {
-  // Convert the Windows file path to a file:// URL
   const configFileURL = pathToFileURL(path.resolve(configFile)).href;
+  console.log(`Generating template test cases from ${configFileURL}...`);
 
-  // Dynamically import the testConfig.js using the file:// URL
-  const { actions } = await import(configFileURL);
+  let actions;
+  try {
+    actions = await flexibleImport(configFileURL);
+  } catch (err) {
+    console.error(`Failed to import testConfig.js: ${err.message}`);
+    process.exit(1);
+  }
 
   const testCases = [];
 
-  Object.keys(actions).forEach((actionName) => {
+  for (const actionName of Object.keys(actions)) {
     const func = actions[actionName];
+
+    if (typeof func !== "function") {
+      console.warn(`Skipping ${actionName}: Not a valid function.`);
+      continue;
+    }
+
+    // Check if the function is defined in a file that indirectly imports a provider
+    const filePath = getFunctionFilePath(func);
+    if (filePath && importsProvider(filePath)) {
+      console.warn(
+        `Skipping ${actionName}: Function depends on provider module.`
+      );
+      continue;
+    }
+
     const paramNames = getParamNames(func);
 
     testCases.push({
       Description: `Test case for ${actionName}`,
-      InitialState: "{}", // Default initial state
+      InitialState: "{}",
       Action: actionName,
       Inputs: paramNames.length
         ? JSON.stringify(createInputPlaceholder(paramNames))
@@ -32,11 +52,67 @@ export const generateTemplateTestCases = async (configFile, outputFormat) => {
       Expected: "{}",
       ExpectedError: "",
     });
-  });
+  }
 
   const outputFilePath = `template-test-cases.${outputFormat}`;
   writeTemplateFile(outputFilePath, outputFormat, testCases);
   console.log(`Template test cases written to ${outputFilePath}`);
+};
+
+/**
+ * Flexible import to handle missing file extensions in ESM and CommonJS.
+ */
+const flexibleImport = async (modulePath) => {
+  console.log(`Attempting to import module: ${modulePath}`);
+
+  try {
+    const module = await import(modulePath);
+    console.log(`Successfully imported: ${modulePath}`);
+    return module.actions;
+  } catch (err) {
+    console.error(`1. Failed to import ${modulePath}: ${err.message}`);
+
+    if (err.message.includes("Unexpected token '<'")) {
+      console.warn(
+        `Skipping ${modulePath}: JSX or unexpected syntax detected.`
+      );
+      return { actions: {} }; // Skip the problematic module
+    }
+
+    if (err.code === "ERR_MODULE_NOT_FOUND" && !modulePath.endsWith(".js")) {
+      console.warn(`Retrying import with '.js' extension: ${modulePath}.js`);
+      try {
+        const module = await import(`${modulePath}.js`);
+        console.log(
+          `Successfully imported with '.js' extension: ${modulePath}.js`
+        );
+        return module.actions;
+      } catch (innerErr) {
+        console.error(`2. Failed to import with '.js': ${innerErr.message}`);
+        throw innerErr;
+      }
+    }
+
+    throw err; // Rethrow for unexpected errors
+  }
+};
+
+/**
+ * Retrieves the file path of a given function if available.
+ */
+const getFunctionFilePath = (func) => {
+  if (func && func.file) {
+    return func.file;
+  }
+  return null;
+};
+
+/**
+ * Detects if the given file imports from a known provider module.
+ */
+const importsProvider = (filePath) => {
+  const code = fs.readFileSync(filePath, "utf8");
+  return code.includes("import {") && code.includes("ModelProvider");
 };
 
 /**
@@ -60,7 +136,7 @@ const getParamNames = (func) => {
 const createInputPlaceholder = (paramNames) => {
   const input = {};
   paramNames.forEach((param) => {
-    input[param] = `<${param}>`; // Placeholder value
+    input[param] = `<${param}>`;
   });
   return input;
 };
