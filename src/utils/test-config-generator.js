@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import { scanAppFunctions } from "./code-scanner.js";
-import { parse } from "@babel/parser";
 
 /**
  * Generates a testConfig.js file based on discovered functions.
@@ -10,39 +9,40 @@ import { parse } from "@babel/parser";
  * @param {string} outputDir - Directory where testConfig.js will be created.
  */
 export const generateTestConfig = (appDir, outputDir = "./") => {
+  console.log("Running generateTestConfig...");
   const functions = scanAppFunctions(appDir);
-  const imports = [];
 
-  functions.forEach((func) => {
-    const filePath = path.resolve(func.file);
-    const code = fs.readFileSync(filePath, "utf8");
-    const ast = parse(code, {
-      sourceType: "module",
-      plugins: ["jsx"],
-      errorRecovery: true,
-    });
+  const skippedFunctions = [];
 
-    let containsJSX = false;
+  // Filter out functions that are not explicitly exported
+  const filteredFunctions = functions.filter((func) => {
+    const code = fs.readFileSync(func.file, "utf8");
 
-    // Check if the file contains JSX
-    ast.program.body.forEach((node) => {
-      if (
-        node.type === "ExpressionStatement" &&
-        node.expression.type === "JSXElement"
-      ) {
-        containsJSX = true;
-      }
-    });
+    // Check if the function is exported
+    const isExported =
+      code.includes(`export const ${func.name}`) ||
+      code.includes(`export function ${func.name}`) ||
+      code.includes(`export default ${func.name}`);
 
-    // Skip files containing JSX
-    if (!containsJSX) {
-      const relativePath =
-        "./" + path.relative(outputDir, func.file).replace(/\\/g, "/");
-      imports.push(`import { ${func.name} } from '${relativePath}';`);
+    if (!isExported) {
+      console.warn(
+        `Skipping function ${func.name}: Not explicitly exported from ${func.file}`
+      );
+      skippedFunctions.push(func.name);
+      return false;
     }
+    return true;
   });
 
-  const mappings = functions.map((func) => `    ${func.name},`).join("\n");
+  const imports = filteredFunctions.map((func) => {
+    const relativePath =
+      "./" + path.relative(outputDir, func.file).replace(/\\/g, "/");
+    return `import { ${func.name} } from '${relativePath}';`;
+  });
+
+  const mappings = filteredFunctions
+    .map((func) => `    ${func.name},`)
+    .join("\n");
 
   const configContent = `
 ${imports.join("\n")}
@@ -54,4 +54,12 @@ ${mappings}
 
   fs.writeFileSync(path.join(outputDir, "testConfig.js"), configContent.trim());
   console.log("testConfig.js generated successfully.");
+
+  // Provide feedback on skipped functions
+  if (skippedFunctions.length > 0) {
+    console.log("\n⚠️ Skipped Functions:");
+    skippedFunctions.forEach((func) => {
+      console.log(`- ${func} (not exported, or passed as a prop/component)`);
+    });
+  }
 };

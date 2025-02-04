@@ -24,9 +24,10 @@ const getAllJsFiles = (dir, files = []) => {
 };
 
 /**
- * Scan app code for functions and filter out React components.
+ * Scan app code for functions, skipping files containing JSX or exporting React components.
  */
 export const scanAppFunctions = (dir) => {
+  console.log(`Starting scan in directory: ${dir}`);
   const jsFiles = getAllJsFiles(dir);
   const functions = [];
 
@@ -35,85 +36,84 @@ export const scanAppFunctions = (dir) => {
     const ast = parse(code, {
       sourceType: "module",
       plugins: ["jsx"],
-      comments: true,
+      errorRecovery: true,
     });
 
-    let isReactFile = false;
+    let containsJSX = false;
+    let exportsReactComponent = false;
 
-    // Detect if the file imports React
+    // Detect if the file contains JSX anywhere
     traverse(ast, {
-      ImportDeclaration({ node }) {
-        if (node.source.value === "react") {
-          isReactFile = true;
+      JSXElement() {
+        containsJSX = true;
+      },
+      JSXFragment() {
+        containsJSX = true;
+      },
+    });
+
+    // Detect if the file exports a React component (capitalized function returning JSX)
+    traverse(ast, {
+      ExportNamedDeclaration({ node }) {
+        if (
+          node.declaration &&
+          node.declaration.type === "FunctionDeclaration"
+        ) {
+          const functionName = node.declaration.id.name;
+          const isComponent = /^[A-Z]/.test(functionName);
+
+          if (isComponent) {
+            // Check if the function returns JSX
+            let returnsJSX = false;
+
+            traverse(node, {
+              ReturnStatement(returnPath) {
+                const argument = returnPath.node.argument;
+                if (
+                  argument &&
+                  (argument.type === "JSXElement" ||
+                    argument.type === "JSXFragment")
+                ) {
+                  returnsJSX = true;
+                }
+              },
+            });
+
+            if (returnsJSX) {
+              exportsReactComponent = true;
+            }
+          }
         }
       },
     });
 
-    // Traverse the AST to find functions and skip React components
+    if (containsJSX || exportsReactComponent) {
+      console.log(`Skipping UI file: ${file}`);
+      return; // Skip files with JSX or exporting React components
+    }
+
+    // Proceed to scan for functions if no JSX or React components
     traverse(ast, {
-      FunctionDeclaration(path) {
-        const functionName = path.node.id.name;
-        const isPotentialReactComponent = /^[A-Z]/.test(functionName);
-        let returnsJSX = false;
+      FunctionDeclaration({ node }) {
+        const functionName = node.id.name;
+        console.log(`Found function: ${functionName} in ${file}`);
 
-        // Check if the function returns JSX within its body
-        path.traverse({
-          ReturnStatement(returnPath) {
-            const argument = returnPath.node.argument;
-            if (
-              argument &&
-              (argument.type === "JSXElement" ||
-                argument.type === "JSXFragment")
-            ) {
-              returnsJSX = true;
-            }
-          },
-        });
-
-        // Skip React components
-        if (isReactFile && isPotentialReactComponent && returnsJSX) {
-          return;
-        }
-
-        // Add non-React functions
         functions.push({
           name: functionName,
-          params: path.node.params.map((param) => param.name),
+          params: node.params.map((param) => param.name),
           file,
         });
       },
 
-      VariableDeclarator(path) {
-        const { node } = path;
+      VariableDeclarator({ node }) {
         if (
           node.init &&
           (node.init.type === "ArrowFunctionExpression" ||
             node.init.type === "FunctionExpression")
         ) {
           const functionName = node.id.name;
-          const isPotentialReactComponent = /^[A-Z]/.test(functionName);
-          let returnsJSX = false;
+          console.log(`Found function: ${functionName} in ${file}`);
 
-          // Check if the arrow function returns JSX
-          path.traverse({
-            ReturnStatement(returnPath) {
-              const argument = returnPath.node.argument;
-              if (
-                argument &&
-                (argument.type === "JSXElement" ||
-                  argument.type === "JSXFragment")
-              ) {
-                returnsJSX = true;
-              }
-            },
-          });
-
-          // Skip React components
-          if (isReactFile && isPotentialReactComponent && returnsJSX) {
-            return;
-          }
-
-          // Add non-React functions
           functions.push({
             name: functionName,
             params: node.init.params.map((param) => param.name),
@@ -123,6 +123,12 @@ export const scanAppFunctions = (dir) => {
       },
     });
   });
+
+  if (functions.length === 0) {
+    console.log("No functions found after scanning.");
+  } else {
+    console.log(`Total functions found: ${functions.length}`);
+  }
 
   return functions;
 };
