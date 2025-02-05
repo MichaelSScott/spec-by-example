@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { pathToFileURL } from "url";
 import xlsx from "xlsx";
@@ -33,7 +33,7 @@ export const generateTemplateTestCases = async (configFile, outputFormat) => {
 
     // Check if the function is defined in a file that indirectly imports a provider
     const filePath = getFunctionFilePath(func);
-    if (filePath && importsProvider(filePath)) {
+    if (filePath && (await importsProvider(filePath))) {
       console.warn(
         `Skipping ${actionName}: Function depends on provider module.`
       );
@@ -55,7 +55,7 @@ export const generateTemplateTestCases = async (configFile, outputFormat) => {
   }
 
   const outputFilePath = `template-test-cases.${outputFormat}`;
-  writeTemplateFile(outputFilePath, outputFormat, testCases);
+  await writeTemplateFile(outputFilePath, outputFormat, testCases);
   console.log(`Template test cases written to ${outputFilePath}`);
 };
 
@@ -110,8 +110,8 @@ const getFunctionFilePath = (func) => {
 /**
  * Detects if the given file imports from a known provider module.
  */
-const importsProvider = (filePath) => {
-  const code = fs.readFileSync(filePath, "utf8");
+const importsProvider = async (filePath) => {
+  const code = await fs.readFile(filePath, "utf8");
   return code.includes("import {") && code.includes("ModelProvider");
 };
 
@@ -148,14 +148,14 @@ const createInputPlaceholder = (paramNames) => {
  * @param {string} format - The file format (xlsx, csv, ods).
  * @param {Array} data - The test cases to write.
  */
-const writeTemplateFile = (filePath, format, data) => {
+const writeTemplateFile = async (filePath, format, data) => {
   const worksheet = xlsx.utils.json_to_sheet(data);
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(workbook, worksheet, "Template Test Cases");
 
   if (format === "csv") {
     const csvData = xlsx.utils.sheet_to_csv(worksheet);
-    fs.writeFileSync(filePath, csvData);
+    await fs.writeFile(filePath, csvData);
   } else {
     xlsx.writeFile(workbook, filePath);
   }

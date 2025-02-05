@@ -1,38 +1,36 @@
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { parse } from "@babel/parser";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const traverse = require("@babel/traverse").default;
 
-/**
- * Recursively get all JS files in a directory
- */
-const getAllJsFiles = (dir, files = []) => {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+const JS_EXTENSION = ".js";
 
-  entries.forEach((entry) => {
+// Recursively get all JS files in a directory
+const getAllJsFiles = async (dir, files = []) => {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
     const fullPath = path.resolve(dir, entry.name);
     if (entry.isDirectory()) {
-      getAllJsFiles(fullPath, files);
-    } else if (entry.isFile() && entry.name.endsWith(".js")) {
+      await getAllJsFiles(fullPath, files);
+    } else if (entry.isFile() && entry.name.endsWith(JS_EXTENSION)) {
       files.push(fullPath);
     }
-  });
+  }
 
   return files;
 };
 
-/**
- * Scan app code for functions, skipping files containing JSX or exporting React components.
- */
-export const scanAppFunctions = (dir) => {
+// Scan app code for functions, skipping files containing JSX or exporting React components.
+export const scanAppFunctions = async (dir) => {
   console.log(`Starting scan in directory: ${dir}`);
-  const jsFiles = getAllJsFiles(dir);
+  const jsFiles = await getAllJsFiles(dir);
   const functions = [];
 
-  jsFiles.forEach((file) => {
-    const code = fs.readFileSync(file, "utf8");
+  for (const file of jsFiles) {
+    const code = await fs.readFile(file, "utf8");
     const ast = parse(code, {
       sourceType: "module",
       plugins: ["jsx"],
@@ -42,7 +40,7 @@ export const scanAppFunctions = (dir) => {
     let containsJSX = false;
     let exportsReactComponent = false;
 
-    // Detect if the file contains JSX anywhere
+    // Single traversal to detect JSX and React component exports
     traverse(ast, {
       JSXElement() {
         containsJSX = true;
@@ -50,22 +48,14 @@ export const scanAppFunctions = (dir) => {
       JSXFragment() {
         containsJSX = true;
       },
-    });
-
-    // Detect if the file exports a React component (capitalized function returning JSX)
-    traverse(ast, {
       ExportNamedDeclaration({ node }) {
         if (
           node.declaration &&
           node.declaration.type === "FunctionDeclaration"
         ) {
           const functionName = node.declaration.id.name;
-          const isComponent = /^[A-Z]/.test(functionName);
-
-          if (isComponent) {
-            // Check if the function returns JSX
+          if (/^[A-Z]/.test(functionName)) {
             let returnsJSX = false;
-
             traverse(node, {
               ReturnStatement(returnPath) {
                 const argument = returnPath.node.argument;
@@ -78,7 +68,6 @@ export const scanAppFunctions = (dir) => {
                 }
               },
             });
-
             if (returnsJSX) {
               exportsReactComponent = true;
             }
@@ -89,7 +78,7 @@ export const scanAppFunctions = (dir) => {
 
     if (containsJSX || exportsReactComponent) {
       console.log(`Skipping UI file: ${file}`);
-      return; // Skip files with JSX or exporting React components
+      continue; // Skip files with JSX or exporting React components
     }
 
     // Proceed to scan for functions if no JSX or React components
@@ -104,7 +93,6 @@ export const scanAppFunctions = (dir) => {
           file,
         });
       },
-
       VariableDeclarator({ node }) {
         if (
           node.init &&
@@ -122,7 +110,7 @@ export const scanAppFunctions = (dir) => {
         }
       },
     });
-  });
+  }
 
   if (functions.length === 0) {
     console.log("No functions found after scanning.");
